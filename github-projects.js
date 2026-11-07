@@ -15,6 +15,22 @@ const CACHE_MINUTES = 15;
 const LANG_COLORS = { JavaScript: "#f1e05a", Python: "#3572A5", "C#": "#178600", HTML: "#e34c26", CSS: "#663399", TypeScript: "#3178c6" };
 const API = "https://api.github.com";
 
+// Projects that live on bloodrive65.com instead of in a GitHub repo.
+// They show up as Featured cards that link straight to the real page.
+const SITE_PROJECTS = [
+  {
+    name: "Twitch Name Selector",
+    description: "Enter your Twitch handle to join the rotation. Names rotate every 6 hours and current users are shown on the page.",
+    url: "https://www.bloodrive65.com/twitch-name-selector",
+    button: "Open Twitch Name Selector"
+  }
+];
+
+// Repos whose main page is on bloodrive65.com. This wins over the repo's Website field.
+const SITE_LINKS = {
+  "sports-watcher": "https://www.bloodrive65.com/sports-watcher"
+};
+
 const STYLE = `
 :host { display:block; width:100%;
   --bg:#1e1e22; --bg2:#26262b; --border:#3d3d45; --text:#f0f0f3; --muted:#a8a8b3;
@@ -143,6 +159,7 @@ function langChip(lang) {
 }
 
 function render(root, { user, repos, readme, releases }) {
+  repos = repos.map(r => SITE_LINKS[r.name] ? { ...r, homepage: SITE_LINKS[r.name] } : r);
   const isFeatured = r => r.homepage || releases[r.name] || (r.topics || []).includes("featured");
   const featured = repos.filter(isFeatured);
   const others = repos.filter(r => !isFeatured(r));
@@ -152,7 +169,7 @@ function render(root, { user, repos, readme, releases }) {
     const rel = releases[r.name];
     const playable = /\b(play|game)\b/i.test(r.description || "");
     const btns = [];
-    if (r.homepage) btns.push(`<a class="btn primary" href="${esc(r.homepage)}">${playable ? "Play now" : "Visit website"}</a>`);
+    if (r.homepage) btns.push(`<a class="btn primary" href="${esc(r.homepage)}">${playable ? "Play now" : /bloodrive65\.com/i.test(r.homepage) ? "Open " + esc(prettyName(r.name)) : "Visit website"}</a>`);
     if (rel) btns.push(`<a class="btn ${btns.length ? "" : "primary"}" href="https://github.com/${USER}/${esc(r.name)}/releases/latest">Download ${esc(rel.tag)}</a>`);
     btns.push(`<a class="btn" href="${esc(r.html_url)}">View code</a>`);
     return `<div class="fcard">
@@ -166,7 +183,12 @@ function render(root, { user, repos, readme, releases }) {
       </div>
       <div class="btns">${btns.join("")}</div>
     </div>`;
-  }).join("");
+  }).join("") + SITE_PROJECTS.map(p => `<div class="fcard">
+      <h3>${esc(p.name)}</h3>
+      <p>${esc(p.description)}</p>
+      <div class="stats"><span class="chip">Lives on <b>bloodrive65.com</b></span></div>
+      <div class="btns"><a class="btn primary" href="${esc(p.url)}">${esc(p.button || "Open")}</a></div>
+    </div>`).join("");
 
   const othersHTML = others.map(r => `
     <a class="card" href="${esc(r.html_url)}">
@@ -189,7 +211,7 @@ function render(root, { user, repos, readme, releases }) {
       </div>
     </section>
 
-    ${featured.length ? `<h2>Featured projects</h2>
+    ${featured.length || SITE_PROJECTS.length ? `<h2>Featured projects</h2>
     <p class="sub">Finished apps and games you can use or play right now.</p>
     <div class="featured">${featuredHTML}</div>` : ""}
 
@@ -208,7 +230,11 @@ function render(root, { user, repos, readme, releases }) {
 
     <p class="foot">This page updates itself from <a href="${esc(user.html_url)}">my GitHub</a>. New projects appear here automatically.</p>`;
 
-  root.querySelectorAll("a").forEach(a => { a.target = "_blank"; a.rel = "noopener"; });
+  // Links to my own site open in the same tab; everything else opens a new tab.
+  root.querySelectorAll("a").forEach(a => {
+    if (/^https:\/\/(www\.)?bloodrive65\.com/i.test(a.href)) { a.target = "_top"; }
+    else { a.target = "_blank"; a.rel = "noopener"; }
+  });
 }
 
 class GithubProjects extends HTMLElement {
